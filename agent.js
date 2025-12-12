@@ -1,46 +1,19 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import { createAgent } from "langchain";
 import data from './data.js'
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { Document } from "@langchain/core/documents";
-import { OpenAIEmbeddings } from '@langchain/openai'
-import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
 import {tool} from '@langchain/core/tools'
 import { z } from 'zod';
+import { MemorySaver } from "@langchain/langgraph";
+import { vectorStore, addYTVideosToVectorStore } from "./embeddings.js";
+
+
+
 const video1 = data[0];
-
-const docs = [new Document({
-  pageContent: video1.transcript,
-  metadata: { video_id: video1.video_id }
-})];
-
-const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 1000,
-  chunkOverlap: 200,
-});
-
-const chunks = await splitter.splitDocuments(docs);
-// console.log('chunks', chunks);
-
-// emembed chunks 
-const embeddings = new OpenAIEmbeddings({
-  model:"text-embedding-3-large"
-});
+await addYTVideosToVectorStore(video1);
 
 
-const vectorStore = new MemoryVectorStore(embeddings);
-await vectorStore.addDocuments(chunks);
-
-
-//retrive the most relevant chunks 
-// const retriveDocs = await vectorStore.similaritySearch("what is the Take on Formula 1's Latest ", 1);
-// console.log('retriveDocs', retriveDocs);
-
-
-
-const retrieveTool = tool(async({query}) => { 
-  console.log('query', query); 
-  const retriveDocs = await vectorStore.similaritySearch(query, 1); 
+const retrieveTool = tool(async({query}, {configurable: {video_id}}) => { 
+  const retriveDocs = await vectorStore.similaritySearch(query, 1, (doc) => doc.metadata.video_id === video_id); 
   const serializeDoc = retriveDocs.map((doc) => doc.pageContent).join('\n');
   return serializeDoc 
 },{ 
@@ -52,20 +25,22 @@ const retrieveTool = tool(async({query}) => {
 })
 
 
-
-
-
 const model = new ChatAnthropic({
   model: "claude-sonnet-4-5-20250929",
 });
 
+const checkpointer = new MemorySaver();
 const agent = createAgent({
   model, 
-  tools: [retrieveTool]
+  tools: [retrieveTool],
+  checkpointer
 });
 
+const video_id = "WOX4TuhHN-o";
 const result = await agent.invoke({
   messages:[{role:'user', content: "tell the breif what was talked about in the video with the title 'Take on Formula 1's Latest'"}]
-});
+},
+{configurable: {thread_id:1, video_id}}
+);
 
 console.log(result.messages.at(-1).content);
