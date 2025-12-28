@@ -1,6 +1,5 @@
 import { ChatAnthropic } from "@langchain/anthropic";
 import { createAgent } from "langchain";
-import data from './data.js'
 import {tool} from '@langchain/core/tools'
 import { z } from 'zod';
 import { MemorySaver } from "@langchain/langgraph";
